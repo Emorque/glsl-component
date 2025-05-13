@@ -1,3 +1,2 @@
-# GLSL-Playground
-To grow my skills for Three.js and 3D in general, I want to grow my understanding with GLSL. 
-That is the purpose behind this project. 
+# GLSL-Component
+After learning a bit of Three.js, the next step was to learn a bit about shaders. This is a small project on how I can display my GLSL journey with reuseable components.

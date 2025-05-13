@@ -1,39 +1,16 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-export const ShaderCard = () => {
+interface ShaderCardProps {
+    scale: number,
+    speed: number,
+    iterations: number
+}
+
+export const ShaderCard = ({scale, speed, iterations} : ShaderCardProps) => {
     const shaderRef = useRef<HTMLCanvasElement>(null)
     const shaderWrapperRef = useRef<HTMLDivElement>(null)
     const materialRef = useRef<THREE.ShaderMaterial>(null)
-    
-    const uniforms = {
-    iTime: { value: 0 },
-    // iResolution:  { value: new THREE.Vector3() }, 
-    iResolution:  { value: new THREE.Vector3(1, 1, 1) }, //iResolution can be initialized as it won't change (uVu)
-    };
-
-    // const fragmentShader = 
-    // `
-    //     #include <common>
-    //     uniform vec3 iResolution;
-    //     uniform float iTime;
-    //     varying vec2 vUv;
-    //     // By iq: https://www.shadertoy.com/user/iq
-    //     // license: Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
-    //     void mainImage( out vec4 fragColor, in vec2 fragCoord )
-    //     {
-    //     // Normalized pixel coordinates (from 0 to 1)
-    //     vec2 uv = fragCoord/iResolution.xy;
-    //     // Time varying pixel color
-    //     vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
-    //     // Output to screen
-    //     fragColor = vec4(col,1.0);
-    //     }
-    //     void main() {
-    //     // mainImage(gl_FragColor, gl_FragCoord.xy);
-    //         mainImage(gl_FragColor, vUv * iResolution.xy);
-    //     }
-    // `;
 
     //Fragment Shader copied from my shaderToy code, except for uniform/varying variables, and void main()
     const fragmentShader = 
@@ -42,6 +19,10 @@ export const ShaderCard = () => {
         uniform vec3 iResolution;
         uniform float iTime;
         varying vec2 vUv;
+
+        uniform float scale;
+        uniform float speed;
+        uniform float iterations;
 
         
         vec3 palette(in float t)
@@ -62,31 +43,15 @@ export const ShaderCard = () => {
             
             vec3 finalColor = vec3(0.0);
             
-            for (float i = 0.0; i <3.0; i++) { // For each iteration, it increases the number of additinal layers in finalColor, and finer details
-                //uv *= 2.0; // Scales each part to be 2x smaller
-                //Spaital repetition
-                //uv = fract(uv); //Fract returns the fractional part of its input, basically like cutting a part of the whole canvas into equal parts
-                //uv -= 0.5; // centers each fract
-
-                //Combining all above Fract related equations;
-                uv = fract(1.5 * uv) - 0.5;
-                
-                // using exponent function below will help in adding difference
-                // x * exp(-x) represents a smooth transition. The two lines on a graph intersect and stay relatively close, then get farther apart
+            for (float i = 0.0; i <iterations; i++) { // For each iteration, it increases the number of additinal layers in finalColor, and finer details
+                uv = fract(scale * uv) - 0.5;
                 float d = length(uv) * exp(-length(uv0)); // d represents the local distance relative to the center of each repeition / fract
-
-                vec3 col = palette(length(uv0) + (i * .2) + (iTime * 0.4)); // Multiplying iTime by a fraction reduces the speed of gradient
-                // with length(uv0), now each the gradients are relative to the space of the entire canvas, not in the individual fracts
-                // adding (i * 0.4) once again adds more variation with each layer
+                vec3 col = palette(length(uv0) + (i * .2) + (iTime * speed)); // Multiplying iTime by a fraction reduces the speed of gradient
 
                 d = sin(d * 16. + iTime)/8.;
                 d = abs(d);
-
-                //d = step(0.1, d);
-                // using pow(x, y), effectively accentuates the darker colors closer to 0 and having a lesser effect on lighter shades
                 d = pow(0.01/d, 1.5);
 
-                //col *= d;
                 finalColor += col* d;
             }
 
@@ -94,7 +59,6 @@ export const ShaderCard = () => {
         }
 
         void main() {
-        // mainImage(gl_FragColor, gl_FragCoord.xy);
             mainImage(gl_FragColor, vUv * iResolution.xy);
         }
     `;
@@ -131,22 +95,24 @@ export const ShaderCard = () => {
         );
         const scene = new THREE.Scene();
         const plane = new THREE.PlaneGeometry(2, 2);
-        const material = new THREE.ShaderMaterial({
+        materialRef.current = new THREE.ShaderMaterial({
             fragmentShader,
             vertexShader,
-            uniforms,
-        });
-        scene.add(new THREE.Mesh(plane, material));
+            uniforms : {
+                iTime: { value: 0 },
+                iResolution:  { value: new THREE.Vector3(1, 1, 1) }, //iResolution can be initialized as it won't change (uVu)
+                scale: { value: 1.5},
+                speed: {value: 0.4},
+                iterations: {value: 3.0}
+            }
+        }); 
+
+        scene.add(new THREE.Mesh(plane, materialRef.current));
         const render = (time : number) => {
-            // if (!shaderRef.current) return
+            if (!materialRef.current) return;
             time *= 0.001;
-
-            // const canvas = shaderRef.current;
-            // uniforms.iResolution.value.set(canvas.width, canvas.height, 1); //No longer needed b/c of vUv
-            uniforms.iTime.value = time;
-
+            materialRef.current.uniforms.iTime.value = time;
             renderer.render(scene, camera);
-            
             animationFrameId = requestAnimationFrame(render);
         }
 
@@ -164,6 +130,13 @@ export const ShaderCard = () => {
             window.removeEventListener('resize', callResize)
         }
     }, [])
+
+    useEffect(() => {
+        if (!materialRef.current) return;
+        materialRef.current.uniforms.scale.value = scale
+        materialRef.current.uniforms.speed.value = speed
+        materialRef.current.uniforms.iterations.value = iterations
+    }, [scale, speed, iterations])
     
     return (
         <div id='shader' ref={shaderWrapperRef}>
